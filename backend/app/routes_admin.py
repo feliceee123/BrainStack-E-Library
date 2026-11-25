@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, validator
 
 from .db import get_db
 from .deps import require_admin
@@ -19,8 +19,7 @@ class BookIn(BaseModel):
     license: str = Field(min_length=1, max_length=100)
     download_url: str = Field(max_length=500)
 
-    @field_validator("download_url")
-    @classmethod
+    @validator("download_url")
     def _url(cls, v: str) -> str:
         v = v.strip()
         if not v.lower().startswith(("http://", "https://")):

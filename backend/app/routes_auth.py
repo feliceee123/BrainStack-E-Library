@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, validator
 
 from . import email_service, security
 from .db import get_db
@@ -22,16 +22,14 @@ class RegisterIn(BaseModel):
     email: str = Field(max_length=120)
     password: str = Field(min_length=8, max_length=128)
 
-    @field_validator("email")
-    @classmethod
+    @validator("email")
     def _email(cls, v: str) -> str:
         v = v.strip().lower()
         if not EMAIL_RE.match(v):
             raise ValueError("Invalid email address")
         return v
 
-    @field_validator("password")
-    @classmethod
+    @validator("password")
     def _password(cls, v: str) -> str:
         if not (re.search(r"[A-Za-z]", v) and re.search(r"\d", v)):
             raise ValueError("Password must contain letters and numbers")

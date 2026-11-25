@@ -1,0 +1,22 @@
+[package]
+name = "chrizkelly10/brainstack-e-library"
+version = "0.1.0"
+description = "E-Library AI API and website"
+entrypoint = "api"
+
+[dependencies]
+"python/python" = "3.13.18"
+
+[fs]
+"/app/backend/app" = "./backend/app"
+"/app/site-packages" = "./wasmer/site-packages"
+"/app/web" = "./web"
+
+[[command]]
+name = "api"
+module = "python/python:python"
+runner = "wasi"
+
+[command.annotations.wasi]
+main-args = ["-c", "import os, uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=int(os.environ.get('PORT', '80')))"]
+env = ["PYTHONPATH=/app/backend:/app/site-packages", "PORT=80"]

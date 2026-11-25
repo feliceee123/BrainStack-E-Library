@@ -7,7 +7,7 @@ and adds a full **embedded Agentic AI** assistant.
 
 | Area              | Phase 2          | Phase 3                          |
 |-------------------|------------------|----------------------------------|
-| Database          | SQLite           | PostgreSQL (`psycopg2`)          |
+| Database          | SQLite           | PostgreSQL (`pg8000`)             |
 | AI Assistant      | Empty tab        | Full tool-calling agent          |
 | My Library        | Partial          | Full favorites endpoints         |
 | Schema            | SQLite syntax    | PostgreSQL + `is_verified` flag  |
@@ -32,7 +32,7 @@ Copy-Item .env.docker.example .env.docker
 notepad .env.docker
 ```
 
-Keep your Gmail SMTP settings in `backend/.env`; Compose passes those to the API container and overrides `DATABASE_URL` to connect to the `db` service. Do not commit either `.env` file.
+Keep your Gmail SMTP settings in `backend/.env`; Compose passes those to the API container and sets the `DB_*` variables to connect to the `db` service. Do not commit either `.env` file.
 
 Start the application from the project root:
 
@@ -110,4 +110,20 @@ Use the public HTTPS website URL for `PUBLIC_BASE_URL` outside local browser tes
 1. ✅ PostgreSQL + AI
 2. ✅ Gmail SMTP email verification
 3. ⬜ Password reset
-4. ⬜ Wasmer deployment files
+## Deploy to Wasmer from GitHub
+
+Wasmer imports a WebAssembly package, not the Docker Compose stack. Before importing this repository:
+
+1. From the project root, prepare the Python dependencies for Wasmer's WASI runtime:
+
+   ```powershell
+   .\scripts\prepare-wasmer.ps1
+   ```
+
+   This downloads pure-Python dependencies into `wasmer/site-packages`; that generated folder is required by the GitHub import and should be committed. The package manifest includes only `backend/app`, `web`, and this dependency folder, not local `.env` files.
+2. Commit and push the Wasmer config, preparation script, generated dependency folder, and all related backend compatibility changes and tests.
+3. In Wasmer, import the GitHub repository and select the `main` branch. The app config provisions PostgreSQL in Wasmer's `fr-roub1` region and requires TLS.
+4. Configure the app's environment variables/secrets in Wasmer before expecting it to start: set `JWT_SECRET` to a new random value; add `GMAIL_ADDRESS` and `GMAIL_APP_PASSWORD` if email verification is enabled; and add `OPENAI_API_KEY` only if using OpenAI. Never put these values in `app.yaml` or GitHub. Gmail SMTP connectivity on Wasmer has not been verified; test email verification before relying on it.
+5. After Wasmer provides the app URL, set `PUBLIC_BASE_URL` to that HTTPS URL. The application initializes its PostgreSQL schema during startup.
+
+The app name in `app.yaml` must be unique on Wasmer; change it there if `brainstack-e-library` is already taken. Do not import until the dependency-preparation step has completed and the generated folder has been pushed.

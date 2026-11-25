@@ -1,4 +1,7 @@
-from app.routes_ai import _fallback_agent
+import pytest
+from pydantic import ValidationError
+
+from app.routes_ai import ChatMessage, ChatRequest, _fallback_agent
 
 
 class FakeCursor:
@@ -106,3 +109,10 @@ def test_guest_cannot_save():
     assert calls == []
     assert confirmation is False
     assert pending is None
+
+
+def test_chat_request_requires_at_least_one_message():
+    with pytest.raises(ValidationError):
+        ChatRequest(messages=[])
+
+    assert ChatRequest(messages=[ChatMessage(role="user", content="hello")])

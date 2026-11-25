@@ -7,10 +7,9 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Optional
+from urllib.parse import parse_qs, unquote, urlparse
 
-import psycopg2
-import psycopg2.extras
-from psycopg2.extras import RealDictCursor
+import pg8000.dbapi
 
 from . import security
 from .seed_data import BOOKS
@@ -19,35 +18,97 @@ from .seed_data import BOOKS
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-def _build_dsn() -> str:
-    """Build a PostgreSQL DSN from environment variables."""
-    # Prefer full DATABASE_URL if provided
-    url = os.getenv("DATABASE_URL")
+def _ssl_context(sslmode: str) -> Optional[bool]:
+    mode = sslmode.strip().lower()
+    if mode == "disable":
+        return False
+    if mode == "require":
+        return True
+    if mode == "prefer":
+        return None
+    raise ValueError("DB_SSLMODE must be one of: disable, prefer, require")
+
+
+def _connection_options() -> dict[str, Any]:
+    url = os.getenv("DATABASE_URL", "").strip()
     if url:
-        return url
+        parsed = urlparse(url)
+        if parsed.scheme not in ("postgres", "postgresql"):
+            raise ValueError("DATABASE_URL must use the postgres or postgresql scheme")
+        query = parse_qs(parsed.query)
+        sslmode = query.get("sslmode", [os.getenv("DB_SSLMODE", "prefer")])[0]
+        options = {
+            "host": parsed.hostname or "localhost",
+            "port": parsed.port or 5432,
+            "database": unquote(parsed.path.lstrip("/")) or "elibrary",
+            "user": unquote(parsed.username or "postgres"),
+            "password": unquote(parsed.password or os.getenv("DB_PASSWORD", "postgres")),
+        }
+    else:
+        sslmode = os.getenv("DB_SSLMODE", "prefer")
+        options = {
+            "host": os.getenv("DB_HOST", "localhost"),
+            "port": int(os.getenv("DB_PORT", "5432")),
+            "database": os.getenv("DB_NAME", "elibrary"),
+            "user": os.getenv("DB_USERNAME", "postgres"),
+            "password": os.getenv("DB_PASSWORD", "postgres"),
+        }
+    options["ssl_context"] = _ssl_context(sslmode)
+    return options
 
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    name = os.getenv("DB_NAME", "elibrary")
-    user = os.getenv("DB_USERNAME", "postgres")
-    password = os.getenv("DB_PASSWORD", "postgres")
 
-    # Wasmer requires SSL
-    sslmode = os.getenv("DB_SSLMODE", "prefer")
-    return (
-        f"host={host} port={port} dbname={name} "
-        f"user={user} password={password} sslmode={sslmode}"
-    )
+class _DictCursor:
+    def __init__(self, cursor) -> None:
+        self._cursor = cursor
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+        return False
+
+    def execute(self, query: str, args=None):
+        self._cursor.execute(query, () if args is None else args)
+        return self
+
+    def _as_dict(self, row):
+        if row is None:
+            return None
+        columns = self._cursor.description
+        if not columns:
+            return row
+        return {column[0]: value for column, value in zip(columns, row)}
+
+    def fetchone(self):
+        return self._as_dict(self._cursor.fetchone())
+
+    def fetchall(self):
+        return [self._as_dict(row) for row in self._cursor.fetchall()]
+
+    def close(self):
+        self._cursor.close()
 
 
-def connect() -> psycopg2.extensions.connection:
-    conn = psycopg2.connect(_build_dsn(), cursor_factory=RealDictCursor)
-    conn.autocommit = False
-    return conn
+class _DictConnection:
+    def __init__(self, connection) -> None:
+        self._connection = connection
+
+    def cursor(self) -> _DictCursor:
+        return _DictCursor(self._connection.cursor())
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+
+def connect() -> _DictConnection:
+    connection = pg8000.dbapi.connect(**_connection_options())
+    connection.autocommit = False
+    return _DictConnection(connection)
 
 
 @contextmanager
-def get_connection() -> Iterator[psycopg2.extensions.connection]:
+def get_connection() -> Iterator[_DictConnection]:
     conn = connect()
     try:
         yield conn
@@ -90,14 +151,21 @@ def init_db() -> None:
                 cur.execute(
                     """
                     INSERT INTO books (title, author, category, description, license, download_url)
-                    VALUES (%(title)s, %(author)s, %(category)s, %(description)s, %(license)s, %(download_url)s)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (title, author) DO UPDATE SET
                         category     = EXCLUDED.category,
                         description  = EXCLUDED.description,
                         license      = EXCLUDED.license,
                         download_url = EXCLUDED.download_url
                     """,
-                    book,
+                    (
+                        book["title"],
+                        book["author"],
+                        book["category"],
+                        book["description"],
+                        book["license"],
+                        book["download_url"],
+                    ),
                 )
 
             # Optional admin bootstrap

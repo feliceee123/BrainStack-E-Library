@@ -15,7 +15,6 @@ from typing import Any, Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from psycopg2.extras import Json
 
 from .ai_tools import TOOL_DEFINITIONS, execute_tool
 from .db import get_db
@@ -34,7 +33,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage] = Field(min_length=1)
+    messages: list[ChatMessage] = Field(min_items=1)
     # Optional: client can send a conversation_id later if we persist history
 
 
@@ -72,23 +71,23 @@ def _save_conversation(db, p: dict, messages: list[dict]) -> None:
             cur.execute(
                 """
                 INSERT INTO ai_conversations (user_id, guest_id, messages)
-                VALUES (%s, NULL, %s)
+                VALUES (%s, NULL, CAST(%s AS jsonb))
                 ON CONFLICT (user_id) WHERE user_id IS NOT NULL DO UPDATE SET
                     messages = EXCLUDED.messages,
                     updated_at = NOW()
                 """,
-                (p["user_id"], Json(messages)),
+                (p["user_id"], json.dumps(messages)),
             )
         else:
             cur.execute(
                 """
                 INSERT INTO ai_conversations (user_id, guest_id, messages)
-                VALUES (NULL, %s, %s)
+                VALUES (NULL, %s, CAST(%s AS jsonb))
                 ON CONFLICT (guest_id) WHERE guest_id IS NOT NULL DO UPDATE SET
                     messages = EXCLUDED.messages,
                     updated_at = NOW()
                 """,
-                (p["guest_id"], Json(messages)),
+                (p["guest_id"], json.dumps(messages)),
             )
 
 

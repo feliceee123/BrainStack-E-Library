@@ -2,9 +2,10 @@ import asyncio
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app import email_service, security
-from app.routes_auth import LoginIn, VerifyEmailIn, login, verify_email
+from app.routes_auth import LoginIn, RegisterIn, VerifyEmailIn, login, verify_email
 
 
 class FakeCursor:
@@ -61,6 +62,23 @@ def test_unverified_user_cannot_log_in(monkeypatch):
 
     assert error.value.status_code == 403
     assert "verify your email" in error.value.detail.lower()
+
+
+def test_registration_model_normalizes_email_and_checks_password():
+    registration = RegisterIn(
+        full_name="Reader",
+        email=" Reader@Example.com ",
+        password="ValidPass123",
+    )
+
+    assert registration.email == "reader@example.com"
+
+    with pytest.raises(ValidationError, match="Password must contain letters and numbers"):
+        RegisterIn(
+            full_name="Reader",
+            email="reader@example.com",
+            password="letters-only",
+        )
 
 
 def test_verification_token_is_single_use():
