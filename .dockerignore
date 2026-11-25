@@ -4,7 +4,6 @@
 .env.docker*
 backend/.env
 backend/.venv
-wasmer/site-packages/
 **/__pycache__
 **/.pytest_cache
 android
