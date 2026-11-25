@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+.env.docker*
+backend/.env
+backend/.venv
+**/__pycache__
+**/.pytest_cache
+android

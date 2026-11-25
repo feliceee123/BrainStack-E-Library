@@ -21,16 +21,37 @@ and adds a full **embedded Agentic AI** assistant.
 4. `recommend_books(preferences?, category?, limit?)`
 5. `save_to_my_library(book_id)` – **only after user confirmation**
 
-## Quick local start
+## Start options
 
-### 1. Create PostgreSQL database
+### Run with Docker Compose (Windows)
+
+From the project root, copy the Docker-only database settings template and replace its sample password with your own local-only password using letters and numbers only:
+
+```powershell
+Copy-Item .env.docker.example .env.docker
+notepad .env.docker
+```
+
+Keep your Gmail SMTP settings in `backend/.env`; Compose passes those to the API container and overrides `DATABASE_URL` to connect to the `db` service. Do not commit either `.env` file.
+
+Start the application from the project root:
+
+```powershell
+docker compose --env-file .env.docker up --build
+```
+
+Open http://localhost:8000 and check http://localhost:8000/api/health. Press `Ctrl+C` to stop it, or run `docker compose --env-file .env.docker down` from the project root. The PostgreSQL data remains in its Docker volume.
+
+### Run backend directly
+
+#### 1. Create PostgreSQL database
 ```bash
 # Ubuntu / WSL example
 sudo -u postgres createdb elibrary
 sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
 ```
 
-### 2. Install dependencies
+#### 2. Install dependencies
 ```bash
 cd backend
 python -m venv .venv
@@ -38,13 +59,13 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure environment
+#### 3. Configure environment
 ```bash
 cp .env.example .env
 # edit .env – at minimum set DATABASE_URL and JWT_SECRET
 ```
 
-### 4. Run
+#### 4. Run
 ```bash
 python run.py
 # or: uvicorn app.main:app --reload --port 8000

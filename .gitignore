@@ -11,3 +11,4 @@ backend/.venv/
 android/local.properties
 android/.gradle/
 android/**/build/
+.env.docker
