@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.ELibraryAI" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#7A0019</item>
+    </style>
+</resources>

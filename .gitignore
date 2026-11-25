@@ -1,0 +1,13 @@
+﻿# Secrets and local environment
+backend/.env
+.env
+
+# Python
+backend/.venv/
+**/__pycache__/
+**/.pytest_cache/
+
+# Android local configuration and generated files
+android/local.properties
+android/.gradle/
+android/**/build/
