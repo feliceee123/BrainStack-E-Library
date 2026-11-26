@@ -1,5 +1,8 @@
 <resources>
     <style name="Theme.ELibraryAI" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">#7A0019</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

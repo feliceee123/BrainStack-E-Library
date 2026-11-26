@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -94,27 +96,51 @@ fun AuthFlow(vm: AppViewModel) {
 
 @Composable
 fun WelcomeScreen(vm: AppViewModel, onLogin: () -> Unit, onRegister: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().background(Maroon).padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("BRAIN STACK", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
-        Spacer(Modifier.height(8.dp))
-        Text("Discover. Learn. Read. Smarter.", color = Color.White.copy(alpha = 0.9f), textAlign = TextAlign.Center)
-        Spacer(Modifier.height(40.dp))
-        Button(
-            onClick = vm::continueAsGuest,
-            enabled = !vm.loading,
-            modifier = Modifier.fillMaxWidth(),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Maroon),
-        ) { Text(if (vm.loading) "Please wait..." else "Continue as Guest") }
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = onLogin, modifier = Modifier.fillMaxWidth(),
-            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("Sign in") }
-        Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onRegister) { Text("Create an account", color = Color.White) }
-        vm.error?.let { Spacer(Modifier.height(12.dp)); Text(it, color = Color(0xFFFFD6DA), textAlign = TextAlign.Center) }
+    Box(Modifier.fillMaxSize().background(Maroon)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp).align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("BRAIN STACK", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Discover. Learn. Read. Smarter.",
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(30.dp))
+            Button(
+                onClick = vm::continueAsGuest,
+                enabled = !vm.loading,
+                modifier = Modifier.fillMaxWidth().height(42.dp),
+                shape = CircleShape,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Maroon,
+                ),
+            ) {
+                Text(if (vm.loading) "Please wait..." else "Continue as Guest", fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(14.dp))
+            OutlinedButton(
+                onClick = onLogin,
+                modifier = Modifier.fillMaxWidth().height(42.dp),
+                shape = CircleShape,
+                border = BorderStroke(1.dp, Color.White),
+                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            ) {
+                Text("Sign in", fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onRegister) {
+                Text("Create an account", color = Color.White, fontSize = 12.sp)
+            }
+            vm.error?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(it, color = Color(0xFFFFD6DA), textAlign = TextAlign.Center)
+            }
+        }
     }
 }
 
