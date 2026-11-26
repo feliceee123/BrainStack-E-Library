@@ -1,8 +1,10 @@
+import hmac
 import re
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, validator
@@ -15,6 +17,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _failed: dict[str, list[float]] = defaultdict(list)
 MAX_FAILS, WINDOW = 5, 300
+MAX_VERIFICATION_CODE_ATTEMPTS = 5
 
 
 class RegisterIn(BaseModel):
@@ -42,35 +45,63 @@ class LoginIn(BaseModel):
 
 
 class VerifyEmailIn(BaseModel):
-    token: str = Field(min_length=1, max_length=200)
+    email: Optional[str] = Field(default=None, max_length=120)
+    code: Optional[str] = Field(default=None, min_length=6, max_length=6)
+    token: Optional[str] = Field(default=None, min_length=1, max_length=200)
+
+    @validator("email")
+    def _email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not EMAIL_RE.match(v):
+            raise ValueError("Invalid email address")
+        return v
+
+    @validator("code")
+    def _code(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not re.fullmatch(r"[0-9]{6}", v):
+            raise ValueError("Verification code must contain six digits")
+        return v
 
 
 class ResendVerificationIn(BaseModel):
     email: str = Field(max_length=120)
 
 
-def _issue_verification_token(db, user_id: int) -> str:
-    token = security.create_verification_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+def _issue_verification_code(db, user_id: int) -> str:
+    code = security.create_verification_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     with db.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
-            VALUES (%s, %s, %s)
+            INSERT INTO email_verification_tokens (user_id, token_hash, expires_at, attempts)
+            VALUES (%s, %s, %s, 0)
             ON CONFLICT (user_id) DO UPDATE SET
                 token_hash = EXCLUDED.token_hash,
                 expires_at = EXCLUDED.expires_at,
-                created_at = NOW()
+                created_at = NOW(),
+                attempts = 0
             """,
-            (user_id, security.hash_verification_token(token), expires_at),
+            (user_id, security.hash_verification_code(code), expires_at),
         )
-    return token
+    return code
 
 
 async def _send_verification(db, user) -> None:
-    token = _issue_verification_token(db, user["id"])
+    code = _issue_verification_code(db, user["id"])
+    code_hash = security.hash_verification_code(code)
     db.commit()
-    await email_service.send_verification_email(user["email"], user["full_name"], token)
+    try:
+        await email_service.send_verification_email(user["email"], user["full_name"], code)
+    except HTTPException:
+        with db.cursor() as cur:
+            cur.execute(
+                "DELETE FROM email_verification_tokens WHERE user_id = %s AND token_hash = %s",
+                (user["id"], code_hash),
+            )
+        db.commit()
+        raise
 
 
 def _user_dict(row) -> dict:
@@ -105,27 +136,64 @@ async def register(data: RegisterIn, db=Depends(get_db)):
         row = cur.fetchone()
     await _send_verification(db, row)
     return {
-        "message": "Account created. Check your email for a verification link before signing in.",
+        "message": "Account created. Enter the verification code sent to your email before signing in.",
         "verification_required": True,
     }
 
 
 @router.post("/verify-email")
 def verify_email(data: VerifyEmailIn, db=Depends(get_db)):
-    token_hash = security.hash_verification_token(data.token)
-    with db.cursor() as cur:
-        cur.execute(
-            """
-            SELECT user_id FROM email_verification_tokens
-            WHERE token_hash = %s AND expires_at > NOW()
-            """,
-            (token_hash,),
-        )
-        token = cur.fetchone()
-        if not token:
-            raise HTTPException(400, "Verification link is invalid or expired.")
-        cur.execute("UPDATE users SET is_verified = TRUE WHERE id = %s", (token["user_id"],))
-        cur.execute("DELETE FROM email_verification_tokens WHERE user_id = %s", (token["user_id"],))
+    if data.code is not None:
+        if not data.email:
+            raise HTTPException(400, "Enter the email address used to register with the verification code.")
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT token.user_id, token.token_hash, token.attempts
+                FROM email_verification_tokens AS token
+                JOIN users ON users.id = token.user_id
+                WHERE users.email = %s AND token.expires_at > NOW()
+                FOR UPDATE OF token
+                """,
+                (data.email,),
+            )
+            verification = cur.fetchone()
+            if not verification:
+                raise HTTPException(400, "Verification code is invalid or expired.")
+            attempts = verification.get("attempts", 0)
+            if attempts >= MAX_VERIFICATION_CODE_ATTEMPTS:
+                raise HTTPException(429, "Too many incorrect codes. Request a new verification code.")
+            code_hash = security.hash_verification_code(data.code)
+            if not hmac.compare_digest(code_hash, verification["token_hash"]):
+                cur.execute(
+                    "UPDATE email_verification_tokens SET attempts = attempts + 1 WHERE user_id = %s",
+                    (verification["user_id"],),
+                )
+                db.commit()
+                if attempts + 1 >= MAX_VERIFICATION_CODE_ATTEMPTS:
+                    raise HTTPException(429, "Too many incorrect codes. Request a new verification code.")
+                raise HTTPException(400, "Verification code is invalid or expired.")
+            user_id = verification["user_id"]
+            cur.execute("UPDATE users SET is_verified = TRUE WHERE id = %s", (user_id,))
+            cur.execute("DELETE FROM email_verification_tokens WHERE user_id = %s", (user_id,))
+    elif data.token and not data.email and len(data.token) >= 32 and not data.token.isdigit():
+        token_hash = security.hash_verification_token(data.token)
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT user_id FROM email_verification_tokens
+                WHERE token_hash = %s AND expires_at > NOW()
+                """,
+                (token_hash,),
+            )
+            token = cur.fetchone()
+            if not token:
+                raise HTTPException(400, "Verification link is invalid or expired.")
+            user_id = token["user_id"]
+            cur.execute("UPDATE users SET is_verified = TRUE WHERE id = %s", (user_id,))
+            cur.execute("DELETE FROM email_verification_tokens WHERE user_id = %s", (user_id,))
+    else:
+        raise HTTPException(400, "Enter the six-digit verification code sent to your email.")
     return {"message": "Email verified. You can now sign in."}
 
 
@@ -148,7 +216,7 @@ async def resend_verification(data: ResendVerificationIn, db=Depends(get_db)):
             send_email = cur.fetchone() is None
         if send_email:
             await _send_verification(db, user)
-    return {"message": "If that account exists and needs verification, an email will be sent."}
+    return {"message": "If that account exists and needs verification, a code will be sent."}
 
 
 @router.post("/login")

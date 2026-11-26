@@ -105,11 +105,11 @@ function authView(mode) {
   const field = (id, label, type, ph) => [h("label", { for: id }, label), h("input", { id, type, placeholder: ph || "", required: "" })];
   async function resendVerification() {
     try {
-      const result = await api("/auth/resend-verification", {
+      await api("/auth/resend-verification", {
         method: "POST",
-        body: { email: $("#email").value },
+        body: { email: $("#email").value.trim().toLowerCase() },
       });
-      msg.replaceChildren(h("div", { class: "msg ok" }, result.message));
+      location.hash = "#/verify-email?email=" + encodeURIComponent($("#email").value.trim().toLowerCase());
     } catch (err) {
       msg.replaceChildren(h("div", { class: "msg err" }, err.message));
     }
@@ -117,12 +117,11 @@ function authView(mode) {
   const form = h("form", { onsubmit: async (e) => {
     e.preventDefault(); const btn = form.querySelector("button"); btn.disabled = true; msg.replaceChildren();
     try {
-      const body = { email: $("#email").value, password: $("#password").value };
+      const body = { email: $("#email").value.trim().toLowerCase(), password: $("#password").value };
       if (isReg) body.full_name = $("#name").value;
       if (isReg) {
-        const result = await api("/auth/register", { method: "POST", body });
-        msg.replaceChildren(h("div", { class: "msg ok" }, result.message),
-          h("button", { class: "btn ghost", type: "button", onclick: resendVerification }, "Resend verification email"));
+        await api("/auth/register", { method: "POST", body });
+        location.hash = "#/verify-email?email=" + encodeURIComponent(body.email);
       } else {
         session.save(await api("/auth/login", { method: "POST", body }));
         location.hash = session.user.role === "admin" ? "#/admin" : "#/dashboard";
@@ -145,20 +144,94 @@ function authView(mode) {
     h("p", { style: "text-align:center" }, h("a", { href: "#/" }, "or browse as guest"))));
 }
 
-async function verifyEmailView(token) {
-  const panel = h("div", { class: "panel" }, h("h2", {}, "Verify your email"), h("p", {}, "Checking your verification link..."));
+async function verifyEmailView(emailParam, codeParam, legacyTokenParam) {
+  const emailInput = h("input", {
+    id: "verification-email",
+    type: "email",
+    value: emailParam || "",
+    placeholder: "you@example.com",
+    autocomplete: "email",
+    required: "",
+  });
+  const codeInput = h("input", {
+    id: "verification-code",
+    class: "verification-code",
+    type: "text",
+    value: codeParam || "",
+    placeholder: "6-digit code",
+    inputmode: "numeric",
+    autocomplete: "one-time-code",
+    maxlength: "6",
+    pattern: "[0-9]{6}",
+    required: "",
+    "aria-label": "Six-digit verification code",
+  });
+  const feedback = h("div");
+  const panel = h("div", { class: "panel" },
+    h("h2", {}, "Verify your email"),
+    h("p", {}, "Enter the six-digit code we sent to your email address. It expires in 15 minutes."),
+    h("form", { onsubmit: async (event) => {
+      event.preventDefault();
+      const button = event.currentTarget.querySelector('button[type="submit"]');
+      button.disabled = true;
+      feedback.replaceChildren();
+      try {
+        const result = await api("/auth/verify-email", {
+          method: "POST",
+          body: { email: emailInput.value.trim().toLowerCase(), code: codeInput.value.trim() },
+        });
+        showVerified(result.message);
+      } catch (err) {
+        feedback.replaceChildren(h("div", { class: "msg err" }, err.message));
+      } finally {
+        button.disabled = false;
+      }
+    } },
+      h("label", { for: "verification-email" }, "Email"),
+      emailInput,
+      h("label", { for: "verification-code" }, "Verification code"),
+      codeInput,
+      h("button", { class: "btn", style: "width:100%;margin-top:16px", type: "submit" }, "Verify email")),
+    h("button", { class: "btn ghost", style: "width:100%;margin-top:10px", type: "button", onclick: async () => {
+      feedback.replaceChildren();
+      try {
+        const result = await api("/auth/resend-verification", {
+          method: "POST",
+          body: { email: emailInput.value.trim().toLowerCase() },
+        });
+        feedback.replaceChildren(h("div", { class: "msg ok" }, result.message));
+      } catch (err) {
+        feedback.replaceChildren(h("div", { class: "msg err" }, err.message));
+      }
+    } }, "Resend code"),
+    feedback,
+    h("p", { style: "text-align:center;font-size:.9rem" }, h("a", { href: "#/login" }, "Back to sign in")));
+  const showVerified = (message) => show(h("div", { class: "panel" },
+    h("h2", {}, "Email verified"),
+    h("p", {}, message),
+    h("a", { class: "btn", href: "#/login" }, "Sign in")));
+
   show(panel);
-  if (!token) {
-    panel.replaceChildren(h("h2", {}, "Invalid verification link"), h("p", {}, "The link is missing its verification token."));
-    return;
-  }
-  try {
-    const result = await api("/auth/verify-email", { method: "POST", body: { token } });
-    panel.replaceChildren(h("h2", {}, "Email verified"), h("p", {}, result.message),
-      h("a", { class: "btn", href: "#/login" }, "Sign in"));
-  } catch (err) {
-    panel.replaceChildren(h("h2", {}, "Could not verify email"), h("p", { class: "msg err" }, err.message),
-      h("a", { href: "#/login" }, "Return to sign in"));
+  if (emailParam && codeParam) {
+    try {
+      const result = await api("/auth/verify-email", {
+        method: "POST",
+        body: { email: emailParam, code: codeParam },
+      });
+      showVerified(result.message);
+    } catch (err) {
+      feedback.replaceChildren(h("div", { class: "msg err" }, err.message));
+    }
+  } else if (legacyTokenParam) {
+    try {
+      const result = await api("/auth/verify-email", {
+        method: "POST",
+        body: { token: legacyTokenParam },
+      });
+      showVerified(result.message);
+    } catch (err) {
+      feedback.replaceChildren(h("div", { class: "msg err" }, err.message));
+    }
   }
 }
 
@@ -375,7 +448,10 @@ async function route() {
     if (routeHash === "#/") homeView();
     else if (routeHash === "#/login") authView("login");
     else if (routeHash === "#/register") authView("register");
-    else if (routeHash === "#/verify-email") await verifyEmailView(new URLSearchParams(hash.split("?")[1] || "").get("token"));
+    else if (routeHash === "#/verify-email") {
+      const params = new URLSearchParams(hash.split("?")[1] || "");
+      await verifyEmailView(params.get("email"), params.get("code"), params.get("token"));
+    }
     else if (routeHash === "#/dashboard") await dashboardView();
     else if (routeHash === "#/books") await booksView();
     else if (book) await bookView(book[1]);

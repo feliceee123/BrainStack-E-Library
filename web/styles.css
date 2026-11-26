@@ -47,6 +47,7 @@ nav a.active{background:var(--maroon);color:#fff}
 label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 4px}
 input[type=text],input[type=email],input[type=password],input[type=search]{width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:1rem;background:#fff;transition:border-color .15s,box-shadow .15s}
 input:focus,textarea:focus{outline:0;border-color:var(--maroon);box-shadow:0 0 0 4px rgba(122,0,25,.12)}
+.verification-code{text-align:center;font-size:1.5rem!important;font-weight:700;letter-spacing:.35em;font-variant-numeric:tabular-nums}
 .msg{padding:10px 14px;border-radius:12px;margin:12px 0;font-size:.9rem}.msg.err{background:#fde8ea;color:#8a1020}.msg.ok{background:#e6f4ea;color:#17622d}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}

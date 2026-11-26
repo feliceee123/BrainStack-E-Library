@@ -18,8 +18,16 @@ def create_verification_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def create_verification_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
 def hash_verification_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_verification_code(code: str) -> str:
+    return hmac.new(SECRET_KEY.encode("utf-8"), code.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def hash_password(password: str) -> str:

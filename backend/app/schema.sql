@@ -53,9 +53,10 @@ CREATE TABLE IF NOT EXISTS revoked_tokens (
 
 CREATE TABLE IF NOT EXISTS email_verification_tokens (
     user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    token_hash TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    attempts   SMALLINT NOT NULL DEFAULT 0
 );
 
 -- Optional: store AI conversation history (useful for multi-turn context)

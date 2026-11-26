@@ -145,6 +145,14 @@ def init_db() -> None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(SCHEMA.read_text(encoding="utf-8"))
+            cur.execute(
+                "ALTER TABLE email_verification_tokens "
+                "ADD COLUMN IF NOT EXISTS attempts SMALLINT NOT NULL DEFAULT 0"
+            )
+            cur.execute(
+                "ALTER TABLE email_verification_tokens "
+                "DROP CONSTRAINT IF EXISTS email_verification_tokens_token_hash_key"
+            )
 
             # Upsert catalog
             for book in BOOKS:

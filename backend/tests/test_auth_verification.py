@@ -23,11 +23,22 @@ class FakeCursor:
         args = args or ()
         if "SELECT * FROM users WHERE email" in sql:
             self.result = self.db.user if args[0] == self.db.user["email"] else None
+        elif "FROM email_verification_tokens AS token" in sql:
+            if self.db.token_hash and args[0] == self.db.user["email"]:
+                self.result = {
+                    "user_id": self.db.user["id"],
+                    "token_hash": self.db.token_hash,
+                    "attempts": self.db.attempts,
+                }
+            else:
+                self.result = None
         elif "SELECT user_id FROM email_verification_tokens" in sql:
             if self.db.token_hash and args[0] == self.db.token_hash:
                 self.result = {"user_id": self.db.user["id"]}
             else:
                 self.result = None
+        elif "UPDATE email_verification_tokens SET attempts = attempts + 1" in sql:
+            self.db.attempts += 1
         elif "UPDATE users SET is_verified = TRUE" in sql:
             self.db.user["is_verified"] = True
         elif "DELETE FROM email_verification_tokens" in sql:
@@ -41,9 +52,13 @@ class FakeDB:
     def __init__(self, user, token_hash=None):
         self.user = user
         self.token_hash = token_hash
+        self.attempts = 0
 
     def cursor(self):
         return FakeCursor(self)
+
+    def commit(self):
+        return None
 
 
 def test_unverified_user_cannot_log_in(monkeypatch):
@@ -98,6 +113,41 @@ def test_verification_token_is_single_use():
     assert error.value.status_code == 400
 
 
+def test_verification_code_is_six_digits():
+    code = security.create_verification_code()
+
+    assert len(code) == 6
+    assert code.isascii() and code.isdigit()
+
+
+def test_verification_code_is_single_use():
+    code = "001234"
+    user = {"id": 7, "email": "reader@example.com", "is_verified": False}
+    db = FakeDB(user, token_hash=security.hash_verification_code(code))
+
+    result = verify_email(VerifyEmailIn(email=user["email"], code=code), db)
+
+    assert result["message"] == "Email verified. You can now sign in."
+    assert user["is_verified"] is True
+    assert db.token_hash is None
+
+
+def test_verification_code_limits_incorrect_attempts():
+    user = {"id": 7, "email": "reader@example.com", "is_verified": False}
+    db = FakeDB(user, token_hash=security.hash_verification_code("654321"))
+
+    for attempt in range(5):
+        with pytest.raises(HTTPException) as error:
+            verify_email(VerifyEmailIn(email=user["email"], code="123456"), db)
+        assert error.value.status_code == (429 if attempt == 4 else 400)
+
+    assert db.attempts == 5
+
+    with pytest.raises(HTTPException) as error:
+        verify_email(VerifyEmailIn(email=user["email"], code="123456"), db)
+    assert error.value.status_code == 429
+
+
 def test_verification_email_uses_configured_brevo_api(monkeypatch):
     sent = {}
 
@@ -125,7 +175,7 @@ def test_verification_email_uses_configured_brevo_api(monkeypatch):
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://library.example.com")
     monkeypatch.setattr(email_service.httpx, "AsyncClient", FakeClient)
 
-    asyncio.run(email_service.send_verification_email("reader@example.com", "Reader", "one-time-token"))
+    asyncio.run(email_service.send_verification_email("reader@example.com", "Reader", "012345"))
 
     assert sent["url"] == "https://api.brevo.com/v3/smtp/email"
     assert sent["headers"]["api-key"] == "test-brevo-api-key"
@@ -133,7 +183,8 @@ def test_verification_email_uses_configured_brevo_api(monkeypatch):
     payload = sent["payload"]
     assert payload["sender"] == {"name": "BrainStack", "email": "sender@example.com"}
     assert payload["to"] == [{"email": "reader@example.com", "name": "Reader"}]
-    assert "https://library.example.com/#/verify-email?token=one-time-token" in payload["htmlContent"]
+    assert "https://library.example.com/#/verify-email?email=reader%40example.com&amp;code=012345" in payload["htmlContent"]
+    assert "expires in 15 minutes" in payload["textContent"]
 
 
 def test_verification_email_requires_brevo_configuration(monkeypatch):

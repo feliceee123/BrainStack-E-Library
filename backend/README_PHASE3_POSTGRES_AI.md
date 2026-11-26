@@ -108,7 +108,7 @@ and the actual books from your PostgreSQL catalog.
 
 ## Brevo email verification
 
-Create a Brevo API key and configure `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, and `PUBLIC_BASE_URL` in `backend/.env`. The sender address must be verified in Brevo. Keep the API key private; never commit it or put it in `app.yaml`. Restart the backend after changing the settings. New registrations receive a verification link and cannot sign in until they open it. Links expire after 24 hours; the web and Android sign-in screens can request a resend.
+Create a Brevo API key and configure `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, and `PUBLIC_BASE_URL` in `backend/.env`. The sender address must be verified in Brevo. Keep the API key private; never commit it or put it in `app.yaml`. Restart the backend after changing the settings. New registrations receive a six-digit verification code that expires after 15 minutes and allows five incorrect attempts. The email also includes a verification link; the web and Android sign-in screens can request a resend.
 
 Use the public HTTPS website URL for `PUBLIC_BASE_URL` outside local browser testing. If Brevo rejects a message, check the API key, verified sender, and account status.
 
