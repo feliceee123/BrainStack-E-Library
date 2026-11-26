@@ -1,6 +1,6 @@
 """E-Library AI – shared REST backend (Phase 3).
 
-PostgreSQL + Agentic AI + Gmail SMTP + Wasmer.
+PostgreSQL + Agentic AI + Brevo email verification + Wasmer.
 Serves both the Android app and the website (static files in ../web).
 Interactive API docs: /docs
 """

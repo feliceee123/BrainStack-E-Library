@@ -98,46 +98,78 @@ def test_verification_token_is_single_use():
     assert error.value.status_code == 400
 
 
-def test_verification_email_uses_configured_gmail_smtp(monkeypatch):
+def test_verification_email_uses_configured_brevo_api(monkeypatch):
     sent = {}
 
-    class FakeSMTP:
-        def __init__(self, host, port, timeout):
-            sent.update(host=host, port=port, timeout=timeout)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def ehlo(self):
+    class FakeResponse:
+        def raise_for_status(self):
             return None
 
-        def starttls(self, context):
-            sent["tls_context"] = context
+    class FakeClient:
+        def __init__(self, timeout):
+            sent["timeout"] = timeout
 
-        def login(self, username, password):
-            sent.update(username=username, password=password)
+        async def __aenter__(self):
+            return self
 
-        def send_message(self, message):
-            sent["message"] = message
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
 
-    monkeypatch.setenv("GMAIL_ADDRESS", "sender@gmail.com")
-    monkeypatch.setenv("GMAIL_APP_PASSWORD", "test-app-password")
-    monkeypatch.setenv("SMTP_HOST", "smtp.gmail.com")
-    monkeypatch.setenv("SMTP_PORT", "587")
+        async def post(self, url, *, headers, json):
+            sent.update(url=url, headers=headers, payload=json)
+            return FakeResponse()
+
+    monkeypatch.setenv("BREVO_API_KEY", "test-brevo-api-key")
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "sender@example.com")
+    monkeypatch.setenv("BREVO_SENDER_NAME", "BrainStack")
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://library.example.com")
-    monkeypatch.setattr(email_service.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(email_service.httpx, "AsyncClient", FakeClient)
 
     asyncio.run(email_service.send_verification_email("reader@example.com", "Reader", "one-time-token"))
 
-    assert sent["host"] == "smtp.gmail.com"
-    assert sent["port"] == 587
-    assert sent["username"] == "sender@gmail.com"
-    assert sent["password"] == "test-app-password"
-    assert sent["tls_context"] is not None
-    message = sent["message"]
-    assert message["From"].endswith("sender@gmail.com>")
-    assert message["To"] == "reader@example.com"
-    assert "https://library.example.com/#/verify-email?token=one-time-token" in message.get_body(preferencelist=("html",)).get_content()
+    assert sent["url"] == "https://api.brevo.com/v3/smtp/email"
+    assert sent["headers"]["api-key"] == "test-brevo-api-key"
+    assert sent["timeout"] == 20.0
+    payload = sent["payload"]
+    assert payload["sender"] == {"name": "BrainStack", "email": "sender@example.com"}
+    assert payload["to"] == [{"email": "reader@example.com", "name": "Reader"}]
+    assert "https://library.example.com/#/verify-email?token=one-time-token" in payload["htmlContent"]
+
+
+def test_verification_email_requires_brevo_configuration(monkeypatch):
+    monkeypatch.delenv("BREVO_API_KEY", raising=False)
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "sender@example.com")
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(email_service.send_verification_email("reader@example.com", "Reader", "token"))
+
+    assert error.value.status_code == 503
+    assert "BREVO_API_KEY" in error.value.detail
+
+
+def test_verification_email_reports_brevo_rejection_without_exposing_key(monkeypatch):
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, *, headers, json):
+            request = email_service.httpx.Request("POST", url)
+            response = email_service.httpx.Response(401, request=request)
+            response.raise_for_status()
+
+    monkeypatch.setenv("BREVO_API_KEY", "test-brevo-api-key")
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "sender@example.com")
+    monkeypatch.setattr(email_service.httpx, "AsyncClient", FakeClient)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(email_service.send_verification_email("reader@example.com", "Reader", "token"))
+
+    assert error.value.status_code == 502
+    assert "HTTP 401" in error.value.detail
+    assert "test-brevo-api-key" not in error.value.detail

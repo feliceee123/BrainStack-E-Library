@@ -39,7 +39,7 @@ Copy-Item .env.docker.example .env.docker
 notepad .env.docker
 ```
 
-Keep your Gmail SMTP settings in `backend/.env`; Compose passes those to the API container and sets the `DB_*` variables to connect to the `db` service. Do not commit either `.env` file.
+Keep your Brevo email settings in `backend/.env`; Compose passes those to the API container and sets the `DB_*` variables to connect to the `db` service. Do not commit either `.env` file.
 
 Start the application from the project root:
 
@@ -106,16 +106,16 @@ and the actual books from your PostgreSQL catalog.
 - If no key → rule-based agent that **still calls the same real tools**.
   Perfect for the exam demo even without paying for an LLM.
 
-## Gmail SMTP email verification
+## Brevo email verification
 
-Enable 2-Step Verification on the Gmail account, create a Google App Password, then set `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, and `PUBLIC_BASE_URL` in `backend/.env`. Set SMTP to `smtp.gmail.com:587` (the defaults). Never use your regular Gmail password or commit the app password. Restart the backend. New registrations receive a verification link and cannot sign in until they open it. Links expire after 24 hours; the web and Android sign-in screens can request a resend.
+Create a Brevo API key and configure `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, and `PUBLIC_BASE_URL` in `backend/.env`. The sender address must be verified in Brevo. Keep the API key private; never commit it or put it in `app.yaml`. Restart the backend after changing the settings. New registrations receive a verification link and cannot sign in until they open it. Links expire after 24 hours; the web and Android sign-in screens can request a resend.
 
-Use the public HTTPS website URL for `PUBLIC_BASE_URL` outside local browser testing. Gmail SMTP has account sending limits and Google may restrict App Passwords for some account types.
+Use the public HTTPS website URL for `PUBLIC_BASE_URL` outside local browser testing. If Brevo rejects a message, check the API key, verified sender, and account status.
 
 ## Next steps in this guide
 
 1. ✅ PostgreSQL + AI
-2. ✅ Gmail SMTP email verification
+2. ✅ Brevo email verification
 3. ⬜ Password reset
 ## Deploy to Wasmer from GitHub
 
@@ -130,7 +130,7 @@ Wasmer imports a WebAssembly package, not the Docker Compose stack. Before impor
    This downloads pure-Python dependencies into `wasmer/site-packages`; that generated folder is required by the GitHub import and should be committed. The package manifest includes only `backend/app`, `web`, and this dependency folder, not local `.env` files.
 2. Commit and push the Wasmer config, preparation script, generated dependency folder, and all related backend compatibility changes and tests.
 3. In Wasmer, import the GitHub repository and select the `main` branch. The app config provisions PostgreSQL in Wasmer's `fr-roub1` region and requires TLS.
-4. Configure the app's environment variables/secrets in Wasmer before expecting it to start: set `JWT_SECRET` to a new random value; add `GMAIL_ADDRESS` and `GMAIL_APP_PASSWORD` if email verification is enabled; and add `OPENAI_API_KEY` only if using OpenAI. Never put these values in `app.yaml` or GitHub. Gmail SMTP connectivity on Wasmer has not been verified; test email verification before relying on it.
-5. After Wasmer provides the app URL, set `PUBLIC_BASE_URL` to that HTTPS URL. The application initializes its PostgreSQL schema during startup.
+4. Configure the app's environment variables/secrets in Wasmer before expecting it to start: set `JWT_SECRET` to a new random value; set `BREVO_API_KEY` to a Brevo API key and `BREVO_SENDER_EMAIL` to a sender verified in Brevo; set `BREVO_SENDER_NAME` if desired; and add `OPENAI_API_KEY` only if using OpenAI. Never put secrets in `app.yaml` or GitHub.
+5. After Wasmer provides the app URL, set `PUBLIC_BASE_URL` to that HTTPS URL. The application initializes its PostgreSQL schema during startup. Test email verification after deployment.
 
 The app name in `app.yaml` must be unique on Wasmer; change it there if `brainstack-e-library` is already taken. Do not import until the dependency-preparation step has completed and the generated folder has been pushed.
