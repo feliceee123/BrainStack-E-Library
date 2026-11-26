@@ -13,6 +13,12 @@ and adds a full **embedded Agentic AI** assistant.
 | Schema            | SQLite syntax    | PostgreSQL + `is_verified` flag  |
 | Placeholders      | `?`              | `%s`                             |
 
+## Catalog covers
+
+Standard Ebooks titles use their source cover artwork, loaded lazily from the
+corresponding public repository. Books without a source cover display a local
+illustrated fallback instead.
+
 ## Tools the AI can call (real database operations)
 
 1. `search_books(query, category?, limit?)`

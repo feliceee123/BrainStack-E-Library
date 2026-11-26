@@ -150,11 +150,12 @@ def init_db() -> None:
             for book in BOOKS:
                 cur.execute(
                     """
-                    INSERT INTO books (title, author, category, description, license, download_url)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO books (title, author, category, description, cover_url, license, download_url)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (title, author) DO UPDATE SET
                         category     = EXCLUDED.category,
                         description  = EXCLUDED.description,
+                        cover_url    = EXCLUDED.cover_url,
                         license      = EXCLUDED.license,
                         download_url = EXCLUDED.download_url
                     """,
@@ -163,6 +164,7 @@ def init_db() -> None:
                         book["author"],
                         book["category"],
                         book["description"],
+                        book.get("cover_url"),
                         book["license"],
                         book["download_url"],
                     ),

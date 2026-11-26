@@ -12,7 +12,7 @@ def search_books(db, query: str, category: Optional[str] = None, limit: int = 8)
     limit = max(1, min(limit, 20))
     args: list[Any] = [f"%{query}%", f"%{query}%"]
     sql = """
-        SELECT id, title, author, category, description
+        SELECT id, title, author, category, description, cover_url
         FROM books
         WHERE (title ILIKE %s OR author ILIKE %s)
     """
@@ -32,7 +32,7 @@ def get_book_details(db, book_id: int) -> Optional[dict]:
     with db.cursor() as cur:
         cur.execute(
             """
-            SELECT id, title, author, category, description, license, download_url
+            SELECT id, title, author, category, description, cover_url, license, download_url
             FROM books WHERE id = %s
             """,
             (book_id,),
@@ -49,7 +49,7 @@ def compare_books(db, book_ids: list[int]) -> list[dict]:
     with db.cursor() as cur:
         cur.execute(
             f"""
-            SELECT id, title, author, category, description, license
+            SELECT id, title, author, category, description, cover_url, license
             FROM books WHERE id IN ({placeholders})
             ORDER BY title
             """,
@@ -67,7 +67,7 @@ def recommend_books(
     """Recommend books based on free-text preferences or a category."""
     limit = max(1, min(limit, 10))
     args: list[Any] = []
-    sql = "SELECT id, title, author, category, description FROM books WHERE 1=1"
+    sql = "SELECT id, title, author, category, description, cover_url FROM books WHERE 1=1"
 
     if category:
         sql += " AND category ILIKE %s"

@@ -1,6 +1,7 @@
 /* E-Library AI - web app (Phase 2). Vanilla JS talking to the shared REST API. */
 const API = "/api";
 const COVERS = ["#7a0019", "#1f4e79", "#2e6b4f", "#6a3d9a", "#b5651d", "#37474f", "#a1304f"];
+const COVER_MARKS = ["✦", "❦", "☾", "✺", "❖", "✧", "⌘"];
 const $ = (sel) => document.querySelector(sel);
 
 const session = {
@@ -37,7 +38,33 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 const show = (...nodes) => { $("#view").replaceChildren(...nodes); };
-const cover = (b, cls = "") => h("div", { class: "cover " + cls, style: "background:" + COVERS[b.id % COVERS.length] }, b.title);
+function cover(b, cls = "") {
+  const id = Number(b.id) || 0, title = h("span", { class: "cover-title" }, b.title);
+  const el = h("div", {
+    class: `cover cover-art-${id % 5} ${cls}`,
+    style: "--cover-base:" + COVERS[id % COVERS.length],
+    role: "img",
+    "aria-label": `Cover art for ${b.title} by ${b.author}`,
+  }, h("span", { class: "cover-mark", "aria-hidden": "true" }, COVER_MARKS[id % COVER_MARKS.length]));
+  if (b.cover_url) {
+    const image = h("img", {
+      class: "cover-image",
+      src: b.cover_url,
+      alt: "",
+      loading: "lazy",
+      decoding: "async",
+      referrerpolicy: "no-referrer",
+    });
+    image.addEventListener("load", () => {
+      el.classList.add("has-cover-image");
+      title.remove();
+    });
+    image.addEventListener("error", () => image.remove());
+    el.append(image);
+  }
+  el.append(title);
+  return el;
+}
 const bookCard = (b) => h("a", { class: "book", href: "#/book/" + b.id },
   cover(b), h("div", { class: "body" }, h("b", {}, b.title), h("small", {}, b.author), h("span", { class: "tag" }, b.category), h("small", {}, b.license)));
 

@@ -13,7 +13,7 @@ from .deps import (
 )
 
 router = APIRouter(prefix="/api", tags=["books"])
-PUBLIC_COLS = "id, title, author, category, description, license"
+PUBLIC_COLS = "id, title, author, category, description, cover_url, license"
 
 
 @router.get("/health", tags=["system"])
