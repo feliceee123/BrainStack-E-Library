@@ -39,13 +39,16 @@ function h(tag, attrs = {}, ...kids) {
 }
 const show = (...nodes) => { $("#view").replaceChildren(...nodes); };
 function cover(b, cls = "") {
-  const id = Number(b.id) || 0, title = h("span", { class: "cover-title" }, b.title);
+  const id = Number(b.id) || 0;
+  const mark = b.category === "Technology" ? "⌘"
+    : b.category === "Poetry & Epics" ? "✒"
+    : COVER_MARKS[id % COVER_MARKS.length];
   const el = h("div", {
     class: `cover cover-art-${id % 5} ${cls}`,
     style: "--cover-base:" + COVERS[id % COVERS.length],
     role: "img",
     "aria-label": `Cover art for ${b.title} by ${b.author}`,
-  }, h("span", { class: "cover-mark", "aria-hidden": "true" }, COVER_MARKS[id % COVER_MARKS.length]));
+  }, h("span", { class: "cover-mark", "aria-hidden": "true" }, mark));
   if (b.cover_url) {
     const image = h("img", {
       class: "cover-image",
@@ -57,12 +60,10 @@ function cover(b, cls = "") {
     });
     image.addEventListener("load", () => {
       el.classList.add("has-cover-image");
-      title.remove();
     });
     image.addEventListener("error", () => image.remove());
     el.append(image);
   }
-  el.append(title);
   return el;
 }
 const bookCard = (b) => h("a", { class: "book", href: "#/book/" + b.id },

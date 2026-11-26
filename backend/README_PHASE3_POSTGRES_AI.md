@@ -15,9 +15,10 @@ and adds a full **embedded Agentic AI** assistant.
 
 ## Catalog covers
 
-Standard Ebooks titles use their source cover artwork, loaded lazily from the
-corresponding public repository. Books without a source cover display a local
-illustrated fallback instead.
+Standard Ebooks titles use title-free hero artwork from their public pages,
+loaded lazily. The artwork fills landscape frames in the catalog and book
+details. Books without an available hero image display local illustrated
+fallback art instead.
 
 ## Tools the AI can call (real database operations)
 

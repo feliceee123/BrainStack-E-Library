@@ -5,8 +5,6 @@ It contains 215+ public-domain / openly licensed works.
 """
 import json
 from pathlib import Path
-from typing import Optional
-from urllib.parse import quote, unquote, urlparse
 
 _catalog_path = Path(__file__).with_name("catalog.json")
 if _catalog_path.exists():
@@ -31,25 +29,3 @@ else:
             "download_url": "https://www.gutenberg.org/ebooks/1661",
         },
     ]
-
-
-def _standard_ebooks_cover_url(download_url: str) -> Optional[str]:
-    parsed = urlparse(download_url)
-    if parsed.hostname not in {"standardebooks.org", "www.standardebooks.org"}:
-        return None
-
-    segments = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
-    if len(segments) < 3 or segments[0] != "ebooks":
-        return None
-
-    repository = quote("_".join(segments[1:]), safe="-_")
-    return (
-        "https://raw.githubusercontent.com/standardebooks/"
-        f"{repository}/master/src/epub/images/cover.svg"
-    )
-
-
-for book in BOOKS:
-    book["cover_url"] = book.get("cover_url") or _standard_ebooks_cover_url(
-        book.get("download_url", "")
-    )
